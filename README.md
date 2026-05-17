@@ -30,6 +30,36 @@ Screen reads now report detailed timing:
 - `OCR`: time spent reading/cropping/OCRing the image.
 - `Total`: full button-to-result time measured inside the screen service.
 
+## Static TFT Data
+
+Static TFT knowledge is stored as generated `.ini` files, not a real database. Generate it from CommunityDragon:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\generate_tft_ini.py --output-dir data\generated
+```
+
+To generate a specific set:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\generate_tft_ini.py --set-number 17 --output-dir data\generated
+```
+
+To also download local images for champions, traits, and items:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\generate_tft_ini.py --set-number 17 --output-dir data\generated --download-assets --asset-kinds champions traits items
+```
+
+Generated files:
+
+- `meta.ini`: source URL, set number, counts.
+- `champions.ini`: champion cost, traits, role, icon paths, local icon path, stats including `hp`, mana, and ability details.
+- `traits.ini`: trait descriptions and breakpoints.
+- `items.ini`: item names, components, tags, effects.
+- `assets/champions`, `assets/abilities`, `assets/traits`, `assets/items`: local `.png` images downloaded from CommunityDragon.
+
+The app can load those files through `tft_companion.services.data_service.load_tft_static_data(...)`.
+
 ## Install
 
 Requires Python 3.11+ in PATH. If `python --version` opens Microsoft Store or fails, install Python from python.org and enable `Add python.exe to PATH`.
