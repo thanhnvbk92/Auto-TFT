@@ -2,6 +2,12 @@
 
 Desktop companion app for TFT decisions. The app reads screenshots and shows advice; it does not click, press keys, or control the game.
 
+Project resume docs:
+
+- `docs/SRS.md`
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/PROGRESS_STATUS.md`
+
 ## Features
 
 - Manual game-state input: stage, level, gold, HP, streak, pairs, board strength.
