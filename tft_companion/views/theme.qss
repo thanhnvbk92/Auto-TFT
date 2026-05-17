@@ -1,0 +1,193 @@
+/* theme.qss - Hextech Dark Mode */
+
+QMainWindow {
+    background-color: #09090b;
+}
+
+QWidget {
+    font-family: "Segoe UI", "Roboto", "Inter", sans-serif;
+    color: #fafafa;
+}
+
+QFrame#sidebar {
+    background-color: #111113;
+    border-right: 1px solid #27272a;
+}
+
+QFrame#card {
+    background-color: #18181b;
+    border: 1px solid #27272a;
+    border-radius: 12px;
+}
+
+/* Generic Buttons */
+QPushButton {
+    background-color: #1f2937;
+    color: #fafafa;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #374151;
+}
+
+/* Primary Action Buttons (Hextech Blue) */
+QPushButton#primaryAction {
+    background-color: #0284c7;
+}
+
+QPushButton#primaryAction:hover {
+    background-color: #0369a1;
+}
+
+/* Navigation Buttons */
+QPushButton#navButton {
+    background-color: transparent;
+    color: #a1a1aa;
+    text-align: left;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+QPushButton#navButton:hover {
+    background-color: #18181b;
+    color: #fafafa;
+}
+
+QPushButton#navButton:checked {
+    background-color: #1e293b;
+    color: #38bdf8;
+    font-weight: bold;
+}
+
+/* Labels */
+QLabel {
+    color: #fafafa;
+}
+
+QLabel#title {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+QLabel#subtitle {
+    font-size: 13px;
+    color: #a1a1aa;
+}
+
+QLabel#metricLabel {
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+QLabel#metricValue {
+    font-size: 24px;
+    font-weight: bold;
+}
+
+/* Inputs & Text Areas */
+QLineEdit, QTextEdit, QComboBox {
+    background-color: #0b1220;
+    border: 1px solid #27272a;
+    border-radius: 8px;
+    color: #fafafa;
+    padding: 8px;
+}
+
+QLineEdit:focus, QTextEdit:focus, QComboBox:focus {
+    border: 1px solid #0284c7;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #0b1220;
+    border: 1px solid #27272a;
+    selection-background-color: #1e293b;
+    color: #fafafa;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #3f3f46;
+    border-radius: 4px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #52525b;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background: transparent;
+    height: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #3f3f46;
+    border-radius: 4px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #52525b;
+}
+
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* Scroll Area */
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QScrollArea > QWidget > QWidget {
+    background-color: transparent;
+}
+
+/* Dialogs & Message Boxes (Hextech Dark Mode fixes) */
+QDialog, QMessageBox {
+    background-color: #18181b;
+    color: #fafafa;
+}
+
+QMessageBox QLabel {
+    color: #fafafa;
+    font-size: 13px;
+}
+
+QMessageBox QPushButton {
+    background-color: #27272a;
+    color: #fafafa;
+    border: 1px solid #3f3f46;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: bold;
+    min-width: 80px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #3f3f46;
+}
+

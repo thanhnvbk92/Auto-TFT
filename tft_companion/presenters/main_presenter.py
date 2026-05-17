@@ -62,6 +62,17 @@ class MainPresenter:
         self.view.show_screen_result(result)
         for key, value in result.fields.items():
             self.view.set_game_field(key, value)
+            
+        if "bench_occupancy" in result.fields:
+            occ_str = result.fields["bench_occupancy"]
+            champs_str = result.fields.get("bench_champions", "")
+            try:
+                states = [x == "1" for x in occ_str.split(",")]
+                champs = [x if x != "None" else None for x in champs_str.split(",")] if champs_str else None
+                self.view.workspace.dashboard_tab.update_bench_occupancy_from_ocr(states, champs)
+            except Exception:
+                pass
+                
         self.update_advice()
 
     def _read_status(self, text: str) -> None:

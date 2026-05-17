@@ -2,136 +2,159 @@ from __future__ import annotations
 
 import html
 import re
-import tkinter as tk
 from pathlib import Path
+from typing import Callable, TYPE_CHECKING
 
-import customtkinter as ctk
-from PIL import Image, ImageTk
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QComboBox, QScrollArea, QPushButton, QFrame
+)
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap
 
 from tft_companion.views.constants import DATA_DIR, ROOT
 
+if TYPE_CHECKING:
+    from tft_companion.views.main_window import TFTCompanionWindow
 
-def build_data_browser(
-    app: ctk.CTk,
-    parent: ctk.CTkFrame,
-    title: str,
-    rows: dict[str, dict[str, str]],
-    formatter,
-) -> None:
-    parent.grid_columnconfigure(0, weight=0)
-    parent.grid_columnconfigure(1, weight=1)
-    parent.grid_rowconfigure(0, weight=1)
 
-    list_card = ctk.CTkFrame(parent, fg_color="#111827", corner_radius=16, width=330)
-    list_card.grid(row=0, column=0, sticky="nsew", padx=(12, 8), pady=12)
-    list_card.grid_propagate(False)
-    ctk.CTkLabel(
-        list_card,
-        text=title,
-        font=ctk.CTkFont(size=20, weight="bold"),
-        anchor="w",
-    ).pack(fill="x", padx=18, pady=(16, 4))
-    ctk.CTkLabel(
-        list_card,
-        text=f"{len(rows)} records loaded from INI",
-        text_color="#94A3B8",
-        anchor="w",
-    ).pack(fill="x", padx=18, pady=(0, 12))
-
-    detail_card = ctk.CTkFrame(parent, fg_color="#111827", corner_radius=16)
-    detail_card.grid(row=0, column=1, sticky="nsew", padx=(8, 12), pady=12)
-    detail_card.grid_columnconfigure(0, weight=1)
-    detail_card.grid_rowconfigure(1, weight=1)
-
-    header = ctk.CTkFrame(detail_card, fg_color="transparent")
-    header.grid(row=0, column=0, sticky="ew", padx=18, pady=(16, 8))
-    header.grid_columnconfigure(1, weight=1)
-    icon_label = tk.Label(header, text="", bg="#111827", fg="#64748B", width=96, height=96)
-    icon_label.grid(row=0, column=0, sticky="nw", padx=(0, 16))
-    title_label = ctk.CTkLabel(
-        header,
-        text="Select a record",
-        font=ctk.CTkFont(size=24, weight="bold"),
-        anchor="w",
-        justify="left",
-    )
-    title_label.grid(row=0, column=1, sticky="ew")
-
-    detail_box = ctk.CTkTextbox(
-        detail_card,
-        wrap="word",
-        font=ctk.CTkFont(family="Segoe UI", size=14),
-        fg_color="#0B1220",
-        corner_radius=14,
-    )
-    detail_box.grid(row=1, column=0, sticky="nsew", padx=16, pady=(0, 16))
-
-    display_to_key = display_map(rows)
-    displays = list(display_to_key)
-    selected = tk.StringVar(value=displays[0] if displays else "No data")
-
-    def show_selected(display: str) -> None:
-        key = display_to_key.get(display)
-        row = rows.get(key or "", {})
-        title_label.configure(text=row.get("name") or key or "Unknown")
-        detail_box.configure(state="normal")
-        detail_box.delete("1.0", "end")
-        detail_box.insert("1.0", formatter(key or "", row))
-        detail_box.configure(state="disabled")
-        set_data_icon(app, icon_label, row, f"{title}:{key}")
-
-    if displays:
-        ctk.CTkOptionMenu(
-            list_card,
-            values=displays,
-            variable=selected,
-            command=show_selected,
-            height=38,
-            fg_color="#0B1220",
-            button_color="#2563EB",
-            button_hover_color="#1D4ED8",
-        ).pack(fill="x", padx=18, pady=(0, 12))
-
-        scroll = ctk.CTkScrollableFrame(list_card, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=12, pady=(0, 14))
+class DataBrowserTab(QWidget):
+    def __init__(self, main_window: TFTCompanionWindow, title: str, rows: dict[str, dict[str, str]], formatter: Callable, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.main_window = main_window
+        self.title_text = title
+        self.rows = rows
+        self.formatter = formatter
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(16)
+        
+        # List Card
+        list_card = QWidget()
+        list_card.setObjectName("card")
+        list_card.setFixedWidth(330)
+        list_layout = QVBoxLayout(list_card)
+        list_layout.setContentsMargins(18, 16, 18, 16)
+        
+        title_lbl = QLabel(title)
+        title_lbl.setObjectName("title")
+        list_layout.addWidget(title_lbl)
+        
+        subtitle = QLabel(f"{len(rows)} records loaded from INI")
+        subtitle.setObjectName("subtitle")
+        list_layout.addWidget(subtitle)
+        list_layout.addSpacing(12)
+        
+        self.display_to_key = self._display_map()
+        displays = list(self.display_to_key.keys())
+        
+        self.combo = QComboBox()
+        self.combo.addItems(displays)
+        self.combo.setMinimumHeight(38)
+        self.combo.currentTextChanged.connect(self.show_selected)
+        list_layout.addWidget(self.combo)
+        list_layout.addSpacing(14)
+        
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(scroll_content)
+        self.scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll_layout.setSpacing(2)
+        
         for display in displays[:180]:
-            ctk.CTkButton(
-                scroll,
-                text=display,
-                command=lambda value=display: (selected.set(value), show_selected(value)),
-                height=32,
-                corner_radius=8,
-                anchor="w",
-                fg_color="#0B1220",
-                hover_color="#1E293B",
-                text_color="#E2E8F0",
-            ).pack(fill="x", pady=2)
+            btn = QPushButton(display)
+            btn.setStyleSheet("text-align: left; padding: 8px; background-color: #0B1220; border-radius: 8px;")
+            btn.clicked.connect(lambda _, value=display: self._on_list_clicked(value))
+            self.scroll_layout.addWidget(btn)
+            
         if len(displays) > 180:
-            ctk.CTkLabel(
-                scroll,
-                text="Use the dropdown above for the remaining records.",
-                text_color="#94A3B8",
-                wraplength=260,
-                justify="left",
-            ).pack(fill="x", pady=8)
-        show_selected(displays[0])
-    else:
-        detail_box.insert("1.0", f"No {title.lower()} data found. Generate INI files first.")
-        detail_box.configure(state="disabled")
+            lbl = QLabel("Use the dropdown above for the remaining records.")
+            lbl.setWordWrap(True)
+            lbl.setStyleSheet("color: #94A3B8; margin-top: 8px;")
+            self.scroll_layout.addWidget(lbl)
+            
+        self.scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        list_layout.addWidget(scroll)
+        
+        layout.addWidget(list_card)
+        
+        # Detail Card
+        detail_card = QWidget()
+        detail_card.setObjectName("card")
+        detail_layout = QVBoxLayout(detail_card)
+        detail_layout.setContentsMargins(18, 16, 18, 16)
+        
+        header = QWidget()
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(0, 0, 0, 8)
+        
+        self.icon_label = QLabel()
+        self.icon_label.setFixedSize(96, 96)
+        self.icon_label.setStyleSheet("background-color: #111827; border-radius: 12px;")
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(self.icon_label)
+        
+        self.detail_title = QLabel("Select a record")
+        self.detail_title.setObjectName("title")
+        self.detail_title.setStyleSheet("font-size: 24px;")
+        header_layout.addWidget(self.detail_title, stretch=1)
+        
+        detail_layout.addWidget(header)
+        
+        self.detail_box = QTextEdit()
+        self.detail_box.setReadOnly(True)
+        font = self.detail_box.font()
+        font.setPointSize(12)
+        self.detail_box.setFont(font)
+        detail_layout.addWidget(self.detail_box)
+        
+        layout.addWidget(detail_card)
+        
+        if displays:
+            self.show_selected(displays[0])
+        else:
+            self.detail_box.setPlainText(f"No {title.lower()} data found. Generate INI files first.")
+
+    def _display_map(self) -> dict[str, str]:
+        pairs: list[tuple[str, str]] = []
+        for key, row in self.rows.items():
+            name = row.get("name") or key
+            cost = row.get("cost")
+            prefix = f"{cost}g " if cost else ""
+            label = f"{prefix}{name} [{key}]"
+            pairs.append((label, key))
+        pairs.sort(key=lambda pair: pair[0].lower())
+        return dict(pairs)
+
+    def _on_list_clicked(self, display: str) -> None:
+        self.combo.setCurrentText(display)
+
+    def show_selected(self, display: str) -> None:
+        key = self.display_to_key.get(display)
+        row = self.rows.get(key or "", {})
+        self.detail_title.setText(row.get("name") or key or "Unknown")
+        self.detail_box.setPlainText(self.formatter(key or "", row))
+        self._set_data_icon(row)
+
+    def _set_data_icon(self, row: dict[str, str]) -> None:
+        path_text = row.get("local_icon") or row.get("ability_local_icon") or ""
+        path = resolve_asset_path(path_text)
+        if not path or not path.exists():
+            self.icon_label.setText("No icon")
+            self.icon_label.setPixmap(QPixmap())
+            return
+        
+        pixmap = QPixmap(str(path))
+        if not pixmap.isNull():
+            scaled = pixmap.scaled(96, 96, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            self.icon_label.setPixmap(scaled)
+        else:
+            self.icon_label.setText("Icon error")
 
 
-def display_map(rows: dict[str, dict[str, str]]) -> dict[str, str]:
-    pairs: list[tuple[str, str]] = []
-    for key, row in rows.items():
-        name = row.get("name") or key
-        cost = row.get("cost")
-        prefix = f"{cost}g " if cost else ""
-        label = f"{prefix}{name} [{key}]"
-        pairs.append((label, key))
-    pairs.sort(key=lambda pair: pair[0].lower())
-    return dict(pairs)
-
-
+# Formatters and Helpers (Unchanged Logic, purely text formatting)
 def format_champion(key: str, row: dict[str, str]) -> str:
     traits = row.get("traits", "").replace("|", ", ")
     lines = [
@@ -207,22 +230,6 @@ def clean_markup(text: str) -> str:
     return text.strip()
 
 
-def set_data_icon(app: ctk.CTk, label: tk.Label, row: dict[str, str], cache_key: str) -> None:
-    path_text = row.get("local_icon") or row.get("ability_local_icon") or ""
-    path = resolve_asset_path(path_text)
-    if not path or not path.exists():
-        label.configure(image="", text="No icon")
-        return
-    try:
-        image = Image.open(path).convert("RGBA")
-        image.thumbnail((96, 96), Image.Resampling.LANCZOS)
-        photo = ImageTk.PhotoImage(image.copy(), master=app)
-        app.data_images[cache_key] = photo
-        label.configure(image=photo, text="")
-    except Exception:
-        label.configure(image="", text="Icon error")
-
-
 def resolve_asset_path(path_text: str) -> Path | None:
     if not path_text:
         return None
@@ -234,4 +241,3 @@ def resolve_asset_path(path_text: str) -> Path | None:
         if candidate.exists():
             return candidate
     return ROOT / path
-

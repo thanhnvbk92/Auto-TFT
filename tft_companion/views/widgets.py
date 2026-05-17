@@ -1,72 +1,112 @@
 from __future__ import annotations
 
-import tkinter as tk
-from collections.abc import Callable
-
-import customtkinter as ctk
+from typing import Callable
+from PyQt6.QtWidgets import (
+    QFrame, QLabel, QVBoxLayout, QHBoxLayout, QWidget, QLineEdit, QPushButton, QGridLayout
+)
+from PyQt6.QtCore import Qt
 
 
 def metric_card(
-    parent: ctk.CTkFrame,
+    parent: QWidget,
     label: str,
-    variable: tk.StringVar,
-    column: int,
+    get_value_callback: Callable[[], str],
     *,
     small: bool = False,
-) -> None:
-    card = ctk.CTkFrame(parent, fg_color="#111827", corner_radius=16)
-    card.grid(row=0, column=column, sticky="ew", padx=(0 if column == 0 else 10, 0))
-    ctk.CTkLabel(card, text=label.upper(), text_color="#94A3B8", anchor="w").pack(
-        fill="x", padx=16, pady=(12, 0)
-    )
-    ctk.CTkLabel(
-        card,
-        textvariable=variable,
-        text_color="#F8FAFC",
-        font=ctk.CTkFont(size=14 if small else 24, weight="bold"),
-        anchor="w",
-        wraplength=220,
-    ).pack(fill="x", padx=16, pady=(3, 14))
+) -> tuple[QFrame, QLabel]:
+    """
+    Creates a metric card and returns the frame and the value label
+    so the parent can update the text when needed.
+    """
+    card = QFrame(parent)
+    card.setObjectName("card")
+    
+    layout = QVBoxLayout(card)
+    layout.setContentsMargins(16, 12, 16, 14)
+    layout.setSpacing(4)
+    
+    title_label = QLabel(label.upper())
+    title_label.setObjectName("metricLabel")
+    layout.addWidget(title_label)
+    
+    value_label = QLabel(get_value_callback())
+    value_label.setObjectName("metricValue")
+    value_label.setWordWrap(True)
+    if small:
+        font = value_label.font()
+        font.setPointSize(14)
+        value_label.setFont(font)
+    layout.addWidget(value_label)
+    
+    return card, value_label
 
 
 def field_grid(
-    parent: ctk.CTkFrame,
-    variables: dict[str, tk.Variable],
+    parent: QWidget,
+    input_widgets: dict[str, QWidget],
     fields: list[tuple[str, str]],
-) -> None:
-    frame = ctk.CTkFrame(parent, fg_color="transparent")
-    frame.pack(fill="x", pady=(0, 8))
-    frame.grid_columnconfigure(tuple(range(len(fields))), weight=1)
-    for col, (label, key) in enumerate(fields):
-        cell = ctk.CTkFrame(frame, fg_color="transparent")
-        cell.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 6, 0))
-        ctk.CTkLabel(cell, text=label, text_color="#CBD5E1", anchor="w").pack(fill="x")
-        ctk.CTkEntry(cell, textvariable=variables[key], height=34).pack(fill="x", pady=(3, 0))
+) -> QWidget:
+    """
+    Creates a grid of input fields.
+    Updates `input_widgets` dict with the created QLineEdit mapped to `key`.
+    """
+    frame = QWidget(parent)
+    layout = QHBoxLayout(frame)
+    layout.setContentsMargins(0, 0, 0, 8)
+    layout.setSpacing(12)
+    
+    for label, key in fields:
+        cell = QWidget()
+        cell_layout = QVBoxLayout(cell)
+        cell_layout.setContentsMargins(0, 0, 0, 0)
+        cell_layout.setSpacing(4)
+        
+        lbl = QLabel(label)
+        lbl.setStyleSheet("color: #CBD5E1;")
+        cell_layout.addWidget(lbl)
+        
+        entry = QLineEdit()
+        entry.setMinimumHeight(34)
+        cell_layout.addWidget(entry)
+        input_widgets[key] = entry
+        
+        layout.addWidget(cell)
+        
+    return frame
 
 
-def single_field(parent: ctk.CTkFrame, label: str, variable: tk.Variable) -> None:
-    ctk.CTkLabel(parent, text=label, text_color="#CBD5E1", anchor="w").pack(
-        fill="x", pady=(10, 4)
-    )
-    ctk.CTkEntry(parent, textvariable=variable, height=36).pack(fill="x")
+def single_field(parent: QWidget, label: str, input_widgets: dict[str, QWidget], key: str) -> QWidget:
+    """
+    Creates a single input field.
+    """
+    frame = QWidget(parent)
+    layout = QVBoxLayout(frame)
+    layout.setContentsMargins(0, 10, 0, 4)
+    layout.setSpacing(4)
+    
+    lbl = QLabel(label)
+    lbl.setStyleSheet("color: #CBD5E1;")
+    layout.addWidget(lbl)
+    
+    entry = QLineEdit()
+    entry.setMinimumHeight(36)
+    layout.addWidget(entry)
+    input_widgets[key] = entry
+    
+    return frame
 
 
 def action_button(
-    parent: ctk.CTkFrame,
+    parent: QWidget,
     text: str,
     command: Callable[[], None],
     *,
-    fg: str,
-    hover: str,
+    is_primary: bool = False,
     height: int = 38,
-) -> None:
-    ctk.CTkButton(
-        parent,
-        text=text,
-        command=command,
-        height=height,
-        corner_radius=10,
-        fg_color=fg,
-        hover_color=hover,
-    ).pack(fill="x", pady=4)
-
+) -> QPushButton:
+    btn = QPushButton(text, parent)
+    btn.setMinimumHeight(height)
+    if is_primary:
+        btn.setObjectName("primaryAction")
+    btn.clicked.connect(command)
+    return btn
