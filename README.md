@@ -14,6 +14,22 @@ Desktop companion app for TFT decisions. The app reads screenshots and shows adv
 - Heuristic advice for economy, roll/level, shop, items, positioning, and risk.
 - Modern dark UI built with CustomTkinter.
 
+## Project Structure
+
+The app is organized with a small MVP split:
+
+- `tft_companion/models`: plain data models such as game state, advice, screen read results, and timing.
+- `tft_companion/services`: screen capture/OCR/scrcpy integration and decision logic.
+- `tft_companion/presenters`: coordination layer between UI actions and services.
+- `tft_companion/views`: CustomTkinter UI.
+- `app.py`: thin entry point.
+
+Screen reads now report detailed timing:
+
+- `Capture`: time spent getting the screenshot/frame.
+- `OCR`: time spent reading/cropping/OCRing the image.
+- `Total`: full button-to-result time measured inside the screen service.
+
 ## Install
 
 Requires Python 3.11+ in PATH. If `python --version` opens Microsoft Store or fails, install Python from python.org and enable `Add python.exe to PATH`.
