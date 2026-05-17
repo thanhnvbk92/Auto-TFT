@@ -28,6 +28,13 @@ Entrypoint:
 View:
 
 - `tft_companion/views/main_window.py`
+- `tft_companion/views/workspace.py`
+- `tft_companion/views/sidebar.py`
+- `tft_companion/views/advisor_tab.py`
+- `tft_companion/views/screen_tab.py`
+- `tft_companion/views/data_browser.py`
+- `tft_companion/views/widgets.py`
+- `tft_companion/views/constants.py`
 
 Presenter:
 
@@ -103,6 +110,10 @@ Android 16
   - Level.
 - Static `.ini` data generation from CommunityDragon.
 - Asset download for champion/ability/trait/item images.
+- Sidebar is navigation-only.
+- Advisor tab contains manual Game State and advice.
+- Screen tab contains capture controls, preview, and readout.
+- Champions, Items, and Traits tabs display generated INI records with icons/details.
 
 ## Recent Fixes
 
@@ -112,6 +123,9 @@ Android 16
 - Added local asset folders.
 - Project refactored to MVP.
 - UI rebuilt as a modern dashboard with metric cards and Advisor/Screen/Data tabs.
+- UI adjusted so sidebar only contains main menus; Game State moved into Advisor and capture actions moved into Screen.
+- Added static data browsers for Champions, Items, and Traits.
+- Split view code into focused modules so `main_window.py` only owns app state and presenter callbacks.
 
 ## Known Limitations
 
