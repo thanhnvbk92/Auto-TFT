@@ -49,6 +49,7 @@ def _draw_bench_hud(
             text_x = li + (ri - li - text_w) // 2
             text_y = max(0, ti - label_h) + (label_h - text_h) // 2 - 1
             draw.text((text_x, text_y), text_str, fill=text_color, font=font)
+        return
             
     # Vẽ các ô hàng chờ tĩnh tham chiếu
     for i, box in enumerate(boxes):
@@ -98,61 +99,41 @@ def _detect_bench_occupancy(
     if not boxes:
         return 0, False, [False] * 9, [None] * 9, []
         
-    occupied_slots = []
-    threshold = 14.0  # Ngưỡng tối ưu cho nửa trên của ô hàng chờ
-    
-    debug_dir = image.filename.parent / "debug_crops" if hasattr(image, 'filename') and image.filename else None
-    if not debug_dir:
-        debug_dir = Path(__file__).resolve().parents[2] / "screenshots" / "debug_crops"
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    
-    stddevs_list = []
-    
-    for i, box in enumerate(boxes):
-        li, ti, ri, bi = box
-        w = ri - li
-        h = bi - ti
-        
-        # Chỉ lấy 60% chiều cao trên của ô hàng chờ
-        occupancy_box = (li, ti + int(h * 0.05), ri, ti + int(h * 0.60))
-        crop = image.crop(occupancy_box)
-        
-        # Tính độ lệch chuẩn màu sắc (StdDev) 3D
-        stat = ImageStat.Stat(crop)
-        mean_stddev = sum(stat.stddev) / len(stat.stddev)
-        stddevs_list.append(mean_stddev)
-        
-        is_occupied = mean_stddev > threshold
-        occupied_slots.append(is_occupied)
-        
-        try:
-            crop.save(debug_dir / f"bench_slot_{i}.png")
-            
-            import time
-            timestamp = int(time.time() * 10) % 10000000
-            dataset_dir = debug_dir.parent / "dataset_crops"
-            dataset_dir.mkdir(parents=True, exist_ok=True)
-            crop.save(dataset_dir / f"bench_slot_{i}_{timestamp}.png")
-        except Exception:
-            pass
-            
-    print(f"\n[DIAGNOSTIC] === THÔNG SỐ ĐỘ LỆCH MÀU NỬA TRÊN 9 Ô HÀNG CHỜ ===")
-    for idx, val in enumerate(stddevs_list):
-        print(f" -> Slot {idx}: StdDev = {val:.2f} (Occupied: {occupied_slots[idx]})")
-    print(f"===========================================================\n")
-    
+    occupied_slots = [False] * 9
     yolo_names = [None] * 9
     detected_yolo_boxes = []
     
-    # Kích hoạt nhận diện bằng YOLO nếu có model tft_champions.pt
+    # 1. Chạy YOLO Object Detection lấy bounding box động
     if yolo_service.is_yolo_active():
-        print("[AI ENGINE] YOLO Active! Đang tiến hành nhận diện tướng toàn màn hình...")
         yolo_results, detected_yolo_boxes = yolo_service.detect_bench_champions(image, boxes)
         for idx, name in enumerate(yolo_results):
             if name is not None:
-                occupied_slots[idx] = True  # Ưu tiên kết quả thông minh từ YOLO
+                occupied_slots[idx] = True
                 yolo_names[idx] = name
                 
+    # 2. Chạy Center-Cropped StdDev bổ trợ để đảm bảo NHẬN DIỆN 100% TƯỚNG không bỏ sót!
+    # Lấy vùng trung tâm 60% để triệt tiêu các biểu tượng gold/shop đè vào góc ô
+    for idx, box in enumerate(boxes):
+        if occupied_slots[idx]:
+            continue  # Đã được YOLO nhận diện, bỏ qua
+            
+        l, t, r, b = box
+        w = r - l
+        h = b - t
+        cx, cy = l + w // 2, t + h // 2
+        cw, ch = int(w * 0.6), int(h * 0.6)
+        
+        center_box = (cx - cw // 2, cy - ch // 2, cx + cw // 2, cy + ch // 2)
+        crop = image.crop(center_box)
+        stat = ImageStat.Stat(crop)
+        stddev = sum(stat.stddev) / 3.0
+        
+        # Nếu độ lệch màu trung tâm > 15.0 -> Chắc chắn có tướng
+        if stddev > 15.0:
+            occupied_slots[idx] = True
+            yolo_names[idx] = "Tướng"
+            detected_yolo_boxes.append((box, "Tướng"))
+            
     occupied_count = sum(1 for x in occupied_slots if x)
     is_full = occupied_count >= 9
     

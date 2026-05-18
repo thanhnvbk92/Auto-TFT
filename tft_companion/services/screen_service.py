@@ -211,12 +211,8 @@ def read_tft_mobile_state(image_path: Path, read_shop: bool = False) -> tuple[di
             fields["bench_occupancy"] = ",".join("1" if x else "0" for x in occupied_slots)
             fields["bench_champions"] = ",".join(x if x else "None" for x in yolo_names)
             
-            # Tự động vẽ HUD nhãn đối tượng lên ảnh gốc
-            try:
-                _draw_bench_hud(image, bench_boxes, yolo_names, detected_yolo_boxes)
-                image.save(image_path)
-            except Exception as draw_exc:
-                pass
+            # Đã loại bỏ vẽ HUD bounding box cũ để ảnh chụp luôn 100% sạch làm dataset training chuẩn xác
+            pass
             
             yolo_info = ""
             detected_champs = [x for x in yolo_names if x is not None]

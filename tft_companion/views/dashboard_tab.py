@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit, QCheckBox, QComboBox, QLineEdit, QPushButton
 )
-from PyQt6.QtCore import Qt, QPoint
+from PyQt6.QtCore import Qt, QPoint, pyqtSignal
 from PyQt6.QtGui import QPixmap
 
 from tft_companion.views.widgets import action_button
@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 
 
 class DashboardTab(QWidget):
+    training_finished = pyqtSignal(bool, str)
+
     def __init__(self, main_window: TFTCompanionWindow, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.main_window = main_window
@@ -205,6 +207,18 @@ class DashboardTab(QWidget):
         self.capture_btn.setStyleSheet("background-color: #10B981; color: white; font-weight: bold;")
         capture_layout.addWidget(self.capture_btn)
         
+        self.dataset_btn = action_button(capture_card, "Tạo Dataset", self._execute_dataset_builder, height=42)
+        self.dataset_btn.setMinimumWidth(120)
+        self.dataset_btn.setStyleSheet("background-color: #8B5CF6; color: white; font-weight: bold;")
+        capture_layout.addWidget(self.dataset_btn)
+        
+        self.train_btn = action_button(capture_card, "Huấn luyện AI", self._execute_training, height=42)
+        self.train_btn.setMinimumWidth(120)
+        self.train_btn.setStyleSheet("background-color: #EC4899; color: white; font-weight: bold;")
+        capture_layout.addWidget(self.train_btn)
+        
+        self.training_finished.connect(self._on_training_finished)
+        
         left_layout.addWidget(capture_card)
         
         # Preview Card
@@ -297,6 +311,142 @@ class DashboardTab(QWidget):
         elif mode == "Dùng Scrcpy Mirror":
             self.main_window._capture_scrcpy()
 
+    def _execute_dataset_builder(self) -> None:
+        from pathlib import Path
+        from PyQt6.QtWidgets import QMessageBox
+        from tft_companion.services import dataset_builder_service
+        
+        # 1. Thực hiện chụp màn hình trước để có dữ liệu mới nhất
+        self._execute_capture()
+        
+        # 2. Lấy đường dẫn ảnh vừa chụp
+        img_path_str = self.image_path_label.text().strip()
+        img_path = Path(img_path_str) if img_path_str else None
+        
+        # Thử fallback giống hiệu chỉnh OCR
+        if not img_path or not img_path.exists():
+            from tft_companion.views.constants import ROOT
+            sc_dir = ROOT / "screenshots"
+            scrcpy_sc = sc_dir / "latest_scrcpy_screen.png"
+            pc_sc = sc_dir / "latest_screen.png"
+            
+            if scrcpy_sc.exists():
+                img_path = scrcpy_sc
+            elif pc_sc.exists():
+                img_path = pc_sc
+            else:
+                QMessageBox.warning(
+                    self, "Không có hình ảnh",
+                    "Hãy thực hiện Chụp ảnh ít nhất 1 lần để hệ thống có ảnh gốc tạo dataset!"
+                )
+                return
+                
+        output_dir = Path("dataset_temp")
+        
+        try:
+            crop_count = dataset_builder_service.build_dataset_from_screenshot(img_path, output_dir)
+            if crop_count > 0:
+                QMessageBox.information(
+                    self, 
+                    "Thành công", 
+                    f"Đã quét và crop thành công {crop_count} cờ đồng minh!\n\n"
+                    f"Tất cả ảnh cờ đã được lưu phẳng trực tiếp tại thư mục:\n"
+                    f"'{output_dir.resolve()}'\n\n"
+                    f"Hãy di chuyển các ảnh này vào thư mục 'dataset_classification/train' hoặc 'val' và đặt trong các folder con mang tên tướng để sẵn sàng huấn luyện!"
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Không tìm thấy tướng",
+                    "Không phát hiện thấy thanh máu tướng nào trên màn hình.\n"
+                    "Hãy chắc chắn rằng game đang mở trên sân đấu chính và tướng hiển thị rõ ràng!"
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi hệ thống", f"Có lỗi xảy ra khi tạo dataset: {e}")
+
+    def _execute_training(self) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        import threading
+        from pathlib import Path
+        import sys
+        import os
+        
+        # Kiểm tra sự tồn tại của dữ liệu huấn luyện trước
+        dataset_train_dir = Path("dataset_classification/train")
+        if not dataset_train_dir.exists() or not any(dataset_train_dir.iterdir()):
+            QMessageBox.warning(
+                self, "Thiếu dữ liệu huấn luyện",
+                "Thư mục 'dataset_classification/train' đang trống hoặc không tồn tại!\n\n"
+                "Hãy phân loại các ảnh từ 'dataset_temp' vào các thư mục con mang tên tướng bên trong:\n"
+                "- 'dataset_classification/train/Ten_Tuong/'\n"
+                "- 'dataset_classification/val/Ten_Tuong/'\n\n"
+                "Sau đó bấm nút này để bắt đầu huấn luyện AI!"
+            )
+            return
+            
+        # Hỏi ý kiến người dùng trước khi bắt đầu
+        reply = QMessageBox.question(
+            self, "Xác nhận huấn luyện",
+            "Hệ thống sẽ bắt đầu huấn luyện mô hình YOLOv8 Classification cho các tướng TFT.\n"
+            "Quá trình này có thể mất vài phút tùy thuộc vào cấu hình máy tính của bạn.\n\n"
+            "Bạn có chắc chắn muốn bắt đầu?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.No:
+            return
+            
+        # Disable button và đổi trạng thái để tránh bấm trùng
+        self.train_btn.setEnabled(False)
+        self.train_btn.setText("Đang train...")
+        self.train_btn.setStyleSheet("background-color: #475569; color: #94A3B8; font-weight: bold;")
+        
+        def worker():
+            try:
+                import subprocess
+                # Sử dụng python từ môi trường hiện tại
+                python_exe = sys.executable
+                script_path = Path("train_classifier.py").resolve()
+                
+                # Ép tiến trình con Python xuất log bằng UTF-8
+                env = os.environ.copy()
+                env["PYTHONIOENCODING"] = "utf-8"
+                
+                # Chạy subprocess và ghi đè log
+                process = subprocess.run(
+                    [python_exe, str(script_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=env,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                )
+                
+                if process.returncode == 0:
+                    self.training_finished.emit(True, "Huấn luyện thành công! Mô hình mới đã được cập nhật trực tiếp tại 'data/models/tft_champions.pt'!")
+                else:
+                    err_msg = process.stderr if process.stderr else "Lỗi không xác định."
+                    self.training_finished.emit(False, f"Huấn luyện thất bại:\n{err_msg}")
+            except Exception as e:
+                self.training_finished.emit(False, f"Lỗi luồng huấn luyện: {e}")
+                
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_training_finished(self, success: bool, message: str) -> None:
+        from PyQt6.QtWidgets import QMessageBox
+        
+        # Khôi phục nút bấm
+        self.train_btn.setEnabled(True)
+        self.train_btn.setText("Huấn luyện AI")
+        self.train_btn.setStyleSheet("background-color: #EC4899; color: white; font-weight: bold;")
+        
+        if success:
+            QMessageBox.information(self, "Huấn luyện hoàn tất", message)
+        else:
+            QMessageBox.critical(self, "Lỗi huấn luyện", message)
+
     def _open_calibration_dialog(self) -> None:
         from pathlib import Path
         from tft_companion.views.calibration_dialog import OcrCalibratorDialog
@@ -329,7 +479,105 @@ class DashboardTab(QWidget):
 
     def show_preview(self, pixmap: QPixmap | None, error_text: str = "") -> None:
         if pixmap:
-            scaled = pixmap.scaled(self.preview_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            # 1. Tạo bản sao của pixmap để không ảnh hưởng đến ảnh gốc trên ổ đĩa
+            annotated_pixmap = QPixmap(pixmap)
+            
+            from PyQt6.QtGui import QPainter, QPen, QColor, QFont
+            from PyQt6.QtCore import QRect
+            from pathlib import Path
+            import cv2
+            from PIL import Image
+            from tft_companion.services.ocr_service import load_custom_bench_boxes
+            from tft_companion.services.dataset_builder_service import detect_health_bars
+            from tft_companion.services.yolo_service import classify_champion_crop
+            
+            painter = QPainter(annotated_pixmap)
+            
+            # --- PHẦN 1: VẼ HÀNG CHỜ TƯỚNG (BENCH) ---
+            bench_boxes = load_custom_bench_boxes((annotated_pixmap.width(), annotated_pixmap.height()))
+            if bench_boxes:
+                for i, box in enumerate(bench_boxes):
+                    is_occupied = self.bench_occupancy_states[i] if i < len(self.bench_occupancy_states) else False
+                    champ_name = self.bench_champions[i] if i < len(self.bench_champions) else None
+                    
+                    if is_occupied:
+                        x1, y1, x2, y2 = box
+                        # Vẽ viền xanh da trời
+                        pen = QPen(QColor(14, 165, 233), 3) # Sky blue
+                        painter.setPen(pen)
+                        painter.setBrush(QColor(14, 165, 233, 30)) # Semi-transparent
+                        painter.drawRect(x1, y1, x2 - x1, y2 - y1)
+                        
+                        # Vẽ nhãn tên tướng
+                        label = champ_name if champ_name else f"Slot {i+1}"
+                        
+                        # Vẽ nền nhãn
+                        painter.setBrush(QColor(14, 165, 233, 200))
+                        painter.setPen(Qt.PenStyle.NoPen)
+                        font = QFont("Inter", 11, QFont.Weight.Bold)
+                        painter.setFont(font)
+                        
+                        # Đo kích thước chữ để vẽ nền nhãn vừa vặn
+                        metrics = painter.fontMetrics()
+                        text_w = metrics.horizontalAdvance(label) + 12
+                        text_h = metrics.height() + 6
+                        
+                        painter.drawRect(x1, y1 - text_h if y1 - text_h > 0 else y1, text_w, text_h)
+                        
+                        # Viết chữ trắng
+                        painter.setPen(QPen(QColor(255, 255, 255)))
+                        painter.drawText(x1 + 6, (y1 - 4 if y1 - text_h > 0 else y1 + text_h - 4), label)
+
+            # --- PHẦN 2: VẼ TƯỚNG TRÊN SÂN ĐẤU (BATTLEFIELD) ---
+            img_path_str = self.image_path_label.text().strip()
+            if img_path_str:
+                img_path = Path(img_path_str)
+                if img_path.exists():
+                    img_bgr = cv2.imread(str(img_path))
+                    if img_bgr is not None:
+                        # Phát hiện các thanh máu
+                        bf_boxes = detect_health_bars(img_bgr)
+                        # Chuyển BGR sang PIL Image để phục vụ phân loại
+                        pil_img = Image.open(str(img_path))
+                        
+                        for box in bf_boxes:
+                            x1, y1, x2, y2 = box
+                            
+                            # Cắt ảnh tướng để phân loại
+                            crop_img = pil_img.crop((x1, y1, x2, y2))
+                            # Nhận diện tên tướng bằng mô hình custom nếu đã train
+                            predicted_name = classify_champion_crop(crop_img)
+                            
+                            # Vẽ viền xanh lá neon cực kỳ chuyên nghiệp
+                            pen = QPen(QColor(34, 197, 94), 3) # Emerald green
+                            painter.setPen(pen)
+                            painter.setBrush(QColor(34, 197, 94, 30)) # Semi-transparent
+                            painter.drawRect(x1, y1, x2 - x1, y2 - y1)
+                            
+                            # Tên tướng hiển thị
+                            label = predicted_name if predicted_name else "Tướng Đồng Minh"
+                            
+                            # Vẽ nền nhãn
+                            painter.setBrush(QColor(34, 197, 94, 200))
+                            painter.setPen(Qt.PenStyle.NoPen)
+                            font = QFont("Inter", 11, QFont.Weight.Bold)
+                            painter.setFont(font)
+                            
+                            # Đo kích thước chữ
+                            metrics = painter.fontMetrics()
+                            text_w = metrics.horizontalAdvance(label) + 12
+                            text_h = metrics.height() + 6
+                            
+                            painter.drawRect(x1, y1 - text_h if y1 - text_h > 0 else y1, text_w, text_h)
+                            
+                            # Viết chữ trắng
+                            painter.setPen(QPen(QColor(255, 255, 255)))
+                            painter.drawText(x1 + 6, (y1 - 4 if y1 - text_h > 0 else y1 + text_h - 4), label)
+                            
+            painter.end()
+            
+            # Scaled và hiển thị
+            scaled = annotated_pixmap.scaled(self.preview_label.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.preview_label.setPixmap(scaled)
         else:
             self.preview_label.clear()
